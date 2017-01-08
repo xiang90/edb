@@ -17,6 +17,11 @@ type SQLDBSyncer struct {
 	DB     *sql.DB
 }
 
+func (ds *SQLDBSyncer) Validate() error {
+	// TODO: validate table schema
+	return nil
+}
+
 func (ds *SQLDBSyncer) Sync(ctx context.Context) error {
 	var (
 		stmt  *sql.Stmt
