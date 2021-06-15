@@ -49,21 +49,13 @@ func (ds *SQLDBSyncer) Sync(ctx context.Context) error {
 	}
 
 	rc, errc := ds.Syncer.SyncBase(ctx)
-	var breakFor bool
+	var done bool
 	for {
-		if breakFor {
+		if done {
 			break
 		}
 		select {
 		case r, ok := <-rc:
-			// ok == false means that buffered channel rc is closed;
-			// if rc is closed and len(r.Kvs) > 0, do process;
-			// if rc is closed and len(r.Kvs) == 0, break for loop because channel is empty and closed;
-			// if rc is open, do process. maybe len(r.Kvs) == 0.
-			if !ok && len(r.Kvs) == 0 {
-				breakFor = true
-				break
-			}
 			for _, kv := range r.Kvs {
 				if ds.NoOverwrite {
 					if _, err := stmt.Exec(kv.Key, clientv3.EventTypePut.String(), kv.Value, kv.ModRevision); err != nil {
@@ -74,6 +66,9 @@ func (ds *SQLDBSyncer) Sync(ctx context.Context) error {
 				if _, err := stmt.Exec(kv.Key, kv.Value); err != nil {
 					return err
 				}
+			}
+			if !ok {
+				done = true
 			}
 		case e := <-errc:
 			if e != nil {
