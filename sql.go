@@ -49,21 +49,32 @@ func (ds *SQLDBSyncer) Sync(ctx context.Context) error {
 	}
 
 	rc, errc := ds.Syncer.SyncBase(ctx)
-	select {
-	case r := <-rc:
-		for _, kv := range r.Kvs {
-			if ds.NoOverwrite {
-				if _, err := stmt.Exec(kv.Key, clientv3.EventTypePut.String(), kv.Value, kv.ModRevision); err != nil {
+	var done bool
+	for {
+		if done {
+			break
+		}
+		select {
+		case r, ok := <-rc:
+			for _, kv := range r.Kvs {
+				if ds.NoOverwrite {
+					if _, err := stmt.Exec(kv.Key, clientv3.EventTypePut.String(), kv.Value, kv.ModRevision); err != nil {
+						return err
+					}
+					continue
+				}
+				if _, err := stmt.Exec(kv.Key, kv.Value); err != nil {
 					return err
 				}
-				continue
 			}
-			if _, err := stmt.Exec(kv.Key, kv.Value); err != nil {
-				return err
+			if !ok {
+				done = true
+			}
+		case e := <-errc:
+			if e != nil {
+				return e
 			}
 		}
-	case e := <-errc:
-		return e
 	}
 
 	wch := ds.Syncer.SyncUpdates(ctx)
